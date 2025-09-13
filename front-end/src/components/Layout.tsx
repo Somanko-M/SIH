@@ -2,6 +2,8 @@ import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Heart, MessageCircle, BookOpen, Users, Brain, Home, AlertTriangle } from "lucide-react";
 import { useState } from "react";
+import QuotePopup from "@/components/QuotePopup";
+
 
 const Layout = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
@@ -149,6 +151,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
           })}
         </div>
       </div>
+       <QuotePopup />
 
       {/* Background Decorations */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">

@@ -28,37 +28,30 @@ app.post("/chat", async (req, res) => {
 
     const session = userSessions[sessionId];
 
-    // ✅ Your original style + constraints
+    // ✅ Friend-style prompt
     const systemPrompt = `
-You are a supportive CBT (Cognitive Behavioral Therapy) assistant acting like a close, caring friend.
-Always:
-- Be warm, empathetic, and conversational — like a real friend, not a therapist.
-- Encourage reflection on thoughts, feelings, and behaviors.
-- Use CBT techniques gently (thought reframing, journaling, behavior activation).
-- Give short, natural replies (1–3 sentences), not long paragraphs.
-- Avoid constant questioning. Maximum 3 relevant questions per session.
-- If asking, keep questions very relevant to what the user said.
-- After 3 questions → stop asking and offer structured help instead.
-- Strictly avoid formatting like **bold** or underlines (feels too AI).
-- If user says “thank you” → end chat kindly and close the conversation.
-- If user shows signs of harm → gently encourage seeking urgent crisis help.
-- After understanding their problem (3–4 exchanges), ask if they’d like a suggestion. 
-  If yes → provide a structured solution:
-  1. Summarize concern in one short sentence.
-  2. Offer 2–3 practical CBT-style steps.
-  3. Give one small exercise (breathing, journaling, small activity).
-  4. End with gentle encouragement and a nudge towards real-life therapy/support.
-    `;
+You are a supportive CBT-based friend.
+Guidelines:
+- Sound like a caring, close friend texting back.
+- Be warm, empathetic, casual, and conversational.
+- Use CBT gently (reframing, journaling, behavior activation).
+- Keep replies short (1–3 sentences).
+- Ask at most 3 relevant questions per session.
+- After 3 questions, stop asking and instead give practical suggestions in a natural, friendly way.
+- Do not format like a report, list, or use numbering. Write like a human would.
+- If user says “thank you,” end warmly and close.
+- If user shows harm signals, gently encourage urgent real-life help.
+`;
 
-    // Force structured suggestion after 3 questions
+    // ✅ After 3 questions → structured, but natural suggestion
     if (session.questionCount >= 3) {
       const forcedSuggestionPrompt = `
-The user has already answered enough questions. 
-Now, without asking anything further, respond as:
-1) One-line summary of their concern.
-2) 2–3 practical CBT-style steps they can try.
-3) One quick, actionable exercise (like journaling or breathing).
-4) A warm closing note with encouragement and a reminder that seeking real-life support is okay.
+The user has already answered 3 questions.
+Now, stop asking more. 
+Reply like a caring friend giving advice, NOT a therapist or report. 
+Keep it short and natural. Example style: 
+"Sounds like you're carrying a lot. Maybe try breaking things into small steps, like writing your thoughts down or taking a quick walk. Even a few deep breaths can help calm things. You’re doing better than you think, and talking to someone you trust could really help too."
+
 User: "${message}"
       `;
 
@@ -66,24 +59,28 @@ User: "${message}"
       const result = await model.generateContent(forcedSuggestionPrompt);
       const reply = result.response.text();
 
+      // Save convo
       session.messages.push({ role: "user", text: message });
       session.messages.push({ role: "assistant", text: reply });
+
+      // ✅ Reset question count after suggestion
+      session.questionCount = 0;
 
       return res.json({ reply });
     }
 
-    // Normal flow
+    // ✅ Normal flow
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     const combinedPrompt = `${systemPrompt}
 Conversation so far: ${JSON.stringify(session.messages)}
 User: "${message}"
-Assistant:`;
+Friend:`;
 
     const result = await model.generateContent({
       contents: [{ role: "user", parts: [{ text: combinedPrompt }] }],
       generationConfig: {
-        temperature: 0.4,
-        maxOutputTokens: 512,
+        temperature: 0.6,
+        maxOutputTokens: 300,
       },
     });
 
@@ -94,7 +91,7 @@ Assistant:`;
       session.questionCount += 1;
     }
 
-    // Save convo
+    // Save conversation
     session.messages.push({ role: "user", text: message });
     session.messages.push({ role: "assistant", text: reply });
 
@@ -109,3 +106,4 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`✅ Backend running on http://localhost:${PORT}`);
 });
+//hello beautiful people, have a great day!

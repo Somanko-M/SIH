@@ -27,7 +27,7 @@ const Chat = () => {
     {
       id: "1",
       content:
-        "Hi there! I'm Sage, your wellness companion. I'm here to listen, support, and help you navigate whatever's on your mind. How are you feeling today? 😊",
+        "Hi there! I'm Skye, your wellness companion. I'm here to listen, support, and help you navigate whatever's on your mind. How are you feeling today? 😊",
       sender: "bot",
       timestamp: new Date(),
       emoji: "👋",
@@ -166,13 +166,13 @@ const handleSendMessage = async (content: string) => {
             <div className="relative">
               <img
                 src={chatbotAvatar}
-                alt="Sage - AI Wellness Companion"
+                alt="Skye - AI Wellness Companion"
                 className="w-12 h-12 rounded-full shadow-[0_4px_15px_hsl(160_50%_85%_/_0.3)]"
               />
               <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-forest rounded-full border-2 border-card animate-pulse"></div>
             </div>
             <div>
-              <h2 className="text-lg font-semibold">Sage</h2>
+              <h2 className="text-lg font-semibold">Skye</h2>
               <p className="text-sm text-muted-foreground">
                 Your AI wellness companion • Always here to listen 💙
               </p>
