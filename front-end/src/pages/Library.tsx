@@ -18,6 +18,7 @@ interface LibraryItem {
   tags: string[];
   featured: boolean;
   emoji: string;
+  url?: string;
 }
 
 const Library = () => {
@@ -37,7 +38,8 @@ const Library = () => {
       rating: 4.9,
       tags: ["breathing", "quick", "stress-relief"],
       featured: true,
-      emoji: "🫁"
+      emoji: "🫁",
+      url:"https://www.youtube.com/watch?v=I-SFdhVwrVA&utm_source=chatgpt.com"
     },
     {
       id: "2",
@@ -46,11 +48,12 @@ const Library = () => {
       type: "article",
       category: "Academic Wellness",
       mood: ["anxious", "stressed"],
-      duration: "8 min read",
+      duration: "7 min read",
       rating: 4.7,
       tags: ["anxiety", "exams", "coping-strategies"],
       featured: true,
-      emoji: "📚"
+      emoji: "📚",
+      url:"https://learningcenter.unc.edu/tips-and-tools/tackling-test-anxiety/?utm_source=chatgpt.com"
     },
     {
       id: "3",
@@ -59,11 +62,12 @@ const Library = () => {
       type: "guide",
       category: "Physical Wellness",
       mood: ["tired", "overwhelmed"],
-      duration: "12 min read",
+      duration: "8 min read",
       rating: 4.8,
       tags: ["sleep", "routine", "health"],
       featured: false,
-      emoji: "🌙"
+      emoji: "🌙",
+      url:"https://www.sleepfoundation.org/sleep-hygiene?utm_source=chatgpt.com"
     },
     {
       id: "4",
@@ -76,7 +80,8 @@ const Library = () => {
       rating: 4.9,
       tags: ["meditation", "calm", "guided"],
       featured: true,
-      emoji: "🧘"
+      emoji: "🧘",
+      url:"https://www.fragrantheart.com/cms/free-audio-meditations?utm_source=chatgpt.com"
     },
     {
       id: "5",
@@ -89,7 +94,8 @@ const Library = () => {
       rating: 4.6,
       tags: ["relationships", "communication", "social-skills"],
       featured: false,
-      emoji: "💝"
+      emoji: "💝",
+      url:"www.youtube.com/watch?v=ikN4Fozz5Fg&utm_source=chatgpt.com"
     },
     {
       id: "6",
@@ -98,11 +104,12 @@ const Library = () => {
       type: "article",
       category: "Emotional Wellness",
       mood: ["lonely", "sad"],
-      duration: "6 min read",
+      duration: "8 min read",
       rating: 4.5,
       tags: ["homesickness", "adjustment", "coping"],
       featured: false,
-      emoji: "🏠"
+      emoji: "🏠",
+      url:"https://rutgershealth.org/news/feeling-homesick-how-manage-it-college?utm_source=chatgpt.com"
     },
     {
       id: "7",
@@ -115,7 +122,8 @@ const Library = () => {
       rating: 4.7,
       tags: ["morning", "energy", "routine"],
       featured: false,
-      emoji: "🌅"
+      emoji: "🌅",
+      url:"https://www.redbull.com/us-en/early-morning-workout-best-exercises?utm_source=chatgpt.com"
     },
     {
       id: "8",
@@ -128,12 +136,13 @@ const Library = () => {
       rating: 4.8,
       tags: ["perfectionism", "self-compassion", "growth"],
       featured: true,
-      emoji: "✨"
+      emoji: "✨",
+      url:"https://www.maplecanyontherapy.com/blog/perfectionism-guide?utm_source=chatgpt.com"
     }
   ];
 
   const categories = ["all", "Mindfulness", "Academic Wellness", "Physical Wellness", "Social Wellness", "Emotional Wellness", "Mental Health"];
-  const moods = ["all", "anxious", "stressed", "tired", "lonely", "sad", "overwhelmed", "unmotivated", "disconnected"];
+  const moods = ["all", "anxious", "stressed", "tired", "overwhelmed", "unmotivated", "disconnected"];
 
   const filteredItems = libraryItems.filter(item => {
     const matchesSearch = item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -285,6 +294,13 @@ const Library = () => {
               
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {featuredItems.map((item) => (
+                   <a
+                  key={item.id}
+                  href={item.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block"
+                >
                   <Card key={item.id} className="card-floating group cursor-pointer">
                     <div className="space-y-4">
                       <div className="flex items-start justify-between">
@@ -327,6 +343,7 @@ const Library = () => {
                       </div>
                     </div>
                   </Card>
+                  </a>
                 ))}
               </div>
             </div>
@@ -336,6 +353,13 @@ const Library = () => {
           <TabsContent value="articles">
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {getItemsByType("article").map((item) => (
+                 <a
+                  key={item.id}
+                  href={item.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block"
+                >
                 <Card key={item.id} className="card-floating group cursor-pointer">
                   <div className="space-y-4">
                     <div className="flex items-start justify-between">
@@ -368,6 +392,7 @@ const Library = () => {
                     </div>
                   </div>
                 </Card>
+                </a>
               ))}
             </div>
           </TabsContent>
@@ -376,6 +401,13 @@ const Library = () => {
           <TabsContent value="videos">
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {getItemsByType("video").map((item) => (
+                <a
+                  key={item.id}
+                  href={item.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block"
+                >
                 <Card key={item.id} className="card-floating group cursor-pointer">
                   <div className="space-y-4">
                     <div className="flex items-start justify-between">
@@ -408,6 +440,7 @@ const Library = () => {
                     </div>
                   </div>
                 </Card>
+                </a>
               ))}
             </div>
           </TabsContent>
@@ -415,6 +448,13 @@ const Library = () => {
           <TabsContent value="audio">
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {getItemsByType("audio").map((item) => (
+                <a
+                  key={item.id}
+                  href={item.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block"
+                >
                 <Card key={item.id} className="card-floating group cursor-pointer">
                   <div className="space-y-4">
                     <div className="flex items-start justify-between">
@@ -447,6 +487,7 @@ const Library = () => {
                     </div>
                   </div>
                 </Card>
+                </a>
               ))}
             </div>
           </TabsContent>
@@ -454,6 +495,13 @@ const Library = () => {
           <TabsContent value="exercises">
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {getItemsByType("exercise").map((item) => (
+                <a
+                  key={item.id}
+                  href={item.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block"
+                >
                 <Card key={item.id} className="card-floating group cursor-pointer">
                   <div className="space-y-4">
                     <div className="flex items-start justify-between">
@@ -486,6 +534,7 @@ const Library = () => {
                     </div>
                   </div>
                 </Card>
+                </a>
               ))}
             </div>
           </TabsContent>
@@ -493,6 +542,13 @@ const Library = () => {
           <TabsContent value="guides">
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {getItemsByType("guide").map((item) => (
+                  <a
+                  key={item.id}
+                  href={item.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block"
+                >
                 <Card key={item.id} className="card-floating group cursor-pointer">
                   <div className="space-y-4">
                     <div className="flex items-start justify-between">
@@ -525,6 +581,7 @@ const Library = () => {
                     </div>
                   </div>
                 </Card>
+                </a>
               ))}
             </div>
           </TabsContent>
