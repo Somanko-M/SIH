@@ -27,7 +27,7 @@ const Chat = () => {
     {
       id: "1",
       content:
-        "Hi there! I'm Sage, your wellness companion. I'm here to listen, support, and help you navigate whatever's on your mind. How are you feeling today? 😊",
+        "Hi there! I'm Skye, your wellness companion. I'm here to listen, support, and help you navigate whatever's on your mind. How are you feeling today? 😊",
       sender: "bot",
       timestamp: new Date(),
       emoji: "👋",
@@ -102,62 +102,55 @@ const Chat = () => {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
-
-  // --- Simulated Bot Responses ---
-  const simulateBotResponse = (userMessage: string): string => {
-    const responses = {
-      anxious:
-        "I hear you, and it's completely normal to feel anxious sometimes. Let's try a quick grounding exercise: Can you name 5 things you can see, 4 things you can touch, 3 things you can hear, 2 things you can smell, and 1 thing you can taste? 🌿",
-      sleep:
-        "Sleep troubles can be really frustrating! Try keeping your room cool and dark, avoiding screens an hour before bed, and doing some light stretching. Want me to guide you through a relaxation exercise? 😴",
-      stress:
-        "Exam stress is tough — you're not alone! Break tasks into smaller chunks, take regular breaks, and remember that your worth isn't defined by grades. You're doing your best. 💪",
-      lonely:
-        "Feeling lonely is hard, but you're not alone. Many students feel this way. Have you considered joining a campus group or activity? Small connections can make a big difference. 🤗",
-      default:
-        "Thanks for sharing. I'm here to listen and support you. Want to tell me a bit more about what's been on your mind lately? 💙",
-    };
-
-    const lower = userMessage.toLowerCase();
-    if (lower.includes("anxious") || lower.includes("anxiety") || lower.includes("worried"))
-      return responses.anxious;
-    if (lower.includes("sleep") || lower.includes("tired") || lower.includes("insomnia"))
-      return responses.sleep;
-    if (lower.includes("stress") || lower.includes("exam") || lower.includes("overwhelmed"))
-      return responses.stress;
-    if (lower.includes("lonely") || lower.includes("alone") || lower.includes("isolated"))
-      return responses.lonely;
-
-    return responses.default;
-  };
-
   // --- Send Message ---
-  const handleSendMessage = async (content: string) => {
-    if (!content.trim()) return;
+const handleSendMessage = async (content: string) => {
+  if (!content.trim()) return;
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      content,
-      sender: "user",
+  const userMessage: Message = {
+    id: Date.now().toString(),
+    content,
+    sender: "user",
+    timestamp: new Date(),
+  };
+
+  setMessages((prev) => [...prev, userMessage]);
+  setInputValue("");
+  setIsTyping(true);
+
+  try {
+    const response = await fetch("http://localhost:5000/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: content }),
+    });
+
+    const data = await response.json();
+
+    const botResponse: Message = {
+      id: (Date.now() + 1).toString(),
+      content: data.reply, // <-- Gemini response
+      sender: "bot",
       timestamp: new Date(),
+      emoji: "🤖",
     };
 
-    setMessages((prev) => [...prev, userMessage]);
-    setInputValue("");
-    setIsTyping(true);
+    setMessages((prev) => [...prev, botResponse]);
+  } catch (error) {
+    console.error("Error fetching bot response:", error);
 
-    setTimeout(() => {
-      const botResponse: Message = {
-        id: (Date.now() + 1).toString(),
-        content: simulateBotResponse(content),
-        sender: "bot",
-        timestamp: new Date(),
-        emoji: "🤖",
-      };
-      setMessages((prev) => [...prev, botResponse]);
-      setIsTyping(false);
-    }, 1500);
-  };
+    const errorResponse: Message = {
+      id: (Date.now() + 1).toString(),
+      content: "⚠️ Sorry, I’m having trouble connecting right now.",
+      sender: "bot",
+      timestamp: new Date(),
+      emoji: "❌",
+    };
+
+    setMessages((prev) => [...prev, errorResponse]);
+  } finally {
+    setIsTyping(false);
+  }
+};
 
   const handleSuggestionClick = (text: string) => {
     handleSendMessage(text);
@@ -173,13 +166,13 @@ const Chat = () => {
             <div className="relative">
               <img
                 src={chatbotAvatar}
-                alt="Sage - AI Wellness Companion"
+                alt="Skye - AI Wellness Companion"
                 className="w-12 h-12 rounded-full shadow-[0_4px_15px_hsl(160_50%_85%_/_0.3)]"
               />
               <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-forest rounded-full border-2 border-card animate-pulse"></div>
             </div>
             <div>
-              <h2 className="text-lg font-semibold">Sage</h2>
+              <h2 className="text-lg font-semibold">Skye</h2>
               <p className="text-sm text-muted-foreground">
                 Your AI wellness companion • Always here to listen 💙
               </p>

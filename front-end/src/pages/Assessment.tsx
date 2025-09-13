@@ -255,7 +255,7 @@ const Assessment = () => {
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Button className="btn-hero">
                   <Heart className="w-4 h-4 mr-2" />
-                  Chat with Sage
+                  Chat with SKye
                 </Button>
                 <Button className="btn-calm">
                   <TrendingUp className="w-4 h-4 mr-2" />
