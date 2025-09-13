@@ -1,0 +1,13 @@
+# Ignore Python cache
+__pycache__/
+*.pyc
+
+# Ignore environment files
+.env
+
+# Ignore Firebase credentials
+serviceAccount.json
+
+# Ignore OS junk files
+.DS_Store
+Thumbs.db
