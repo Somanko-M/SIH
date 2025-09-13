@@ -26,5 +26,5 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src", "../admin/StatCard.tsx", "../admin/ChartCard.tsx", "../admin/ResourcesStats.tsx", "../admin/Analytics.tsx", "../admin/AdminDashboard.tsx"]
 }

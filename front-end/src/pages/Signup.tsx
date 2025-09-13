@@ -7,46 +7,69 @@ import { useNavigate } from "react-router-dom";
 
 const Signup = () => {
   const navigate = useNavigate();
-
   const [form, setForm] = useState({
-    name: "",
+    fullName: "",
     username: "",
     email: "",
     phone: "",
     password: "",
   });
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Signup data:", form);
+    setLoading(true);
 
-    // 🔥 later connect with Firebase/Backend here
-    alert("Signup successful!");
-    navigate("/login");
+    try {
+      const response = await fetch("http://localhost:8000/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        alert("Error: " + error.detail);
+        setLoading(false);
+        return;
+      }
+
+      const data = await response.json();
+      alert(data.message);
+
+      // Redirect to login after signup
+      navigate("/login");
+    } catch (err) {
+      console.error(err);
+      alert("Signup failed. Please try again later.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="flex justify-center items-center min-h-screen bg-gray-50">
-      <Card className="w-full max-w-md shadow-lg rounded-2xl">
+    <div className="flex justify-center items-center min-h-screen bg-gradient-to-br from-background via-sunshine/5 to-primary/10">
+      <Card className="w-full max-w-md shadow-xl rounded-2xl border border-gray-100">
         <CardHeader>
-          <CardTitle className="text-2xl font-bold text-center">Create Account</CardTitle>
+          <CardTitle className="text-2xl font-bold text-center">
+            Create Account ✨
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            
             {/* Full Name */}
             <div>
-              <Label htmlFor="name">Full Name</Label>
+              <Label htmlFor="fullName">Full Name</Label>
               <Input
-                id="name"
-                name="name"
+                id="fullName"
+                name="fullName"
                 type="text"
                 placeholder="John Doe"
-                value={form.name}
+                value={form.fullName}
                 onChange={handleChange}
                 required
               />
@@ -80,7 +103,7 @@ const Signup = () => {
               />
             </div>
 
-            {/* Phone Number */}
+            {/* Phone */}
             <div>
               <Label htmlFor="phone">Phone Number</Label>
               <Input
@@ -109,8 +132,12 @@ const Signup = () => {
             </div>
 
             {/* Submit */}
-            <Button type="submit" className="w-full rounded-xl">
-              Sign Up
+            <Button
+              type="submit"
+              className="w-full rounded-xl bg-gradient-to-r from-primary to-sunshine text-white"
+              disabled={loading}
+            >
+              {loading ? "Signing up..." : "Sign Up"}
             </Button>
 
             {/* Redirect */}
@@ -118,7 +145,7 @@ const Signup = () => {
               Already have an account?{" "}
               <span
                 onClick={() => navigate("/login")}
-                className="text-blue-600 hover:underline cursor-pointer"
+                className="text-primary font-medium hover:underline cursor-pointer"
               >
                 Login
               </span>
