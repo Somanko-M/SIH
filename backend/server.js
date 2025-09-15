@@ -3,6 +3,7 @@ import express from "express";
 import bodyParser from "body-parser";
 import cors from "cors";
 import dotenv from "dotenv";
+import fetch from "node-fetch"; // make sure node-fetch is installed
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 dotenv.config();
@@ -16,6 +17,8 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // Track conversation state
 let userSessions = {}; // { sessionId: { messages: [], questionCount: 0 } }
+
+const PY_API_URL = process.env.VITE_API_URL_PY || "http://127.0.0.1:8000";
 
 app.post("/chat", async (req, res) => {
   try {
@@ -59,11 +62,21 @@ User: "${message}"
       const result = await model.generateContent(forcedSuggestionPrompt);
       const reply = result.response.text();
 
-      // Save convo
+      // Save conversation locally
       session.messages.push({ role: "user", text: message });
       session.messages.push({ role: "assistant", text: reply });
 
-      // ✅ Reset question count after suggestion
+      // ✅ Send only bot reply to Python backend
+      await fetch(`${PY_API_URL}/chat/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          conversationId: sessionId,
+          recipient: "serene_bot",
+          text: reply,
+        }),
+      });
+
       session.questionCount = 0;
 
       return res.json({ reply });
@@ -86,14 +99,24 @@ Friend:`;
 
     let reply = result.response.text();
 
-    // Count if Gemini ended with a question
     if (reply.trim().endsWith("?")) {
       session.questionCount += 1;
     }
 
-    // Save conversation
+    // Save conversation locally
     session.messages.push({ role: "user", text: message });
     session.messages.push({ role: "assistant", text: reply });
+
+    // ✅ Send only bot reply to Python backend
+    await fetch(`${PY_API_URL}/chat/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        conversationId: sessionId,
+        recipient: "serene_bot",
+        text: reply,
+      }),
+    });
 
     res.json({ reply });
   } catch (err) {
@@ -102,8 +125,8 @@ Friend:`;
   }
 });
 
+// 🔹 Change port to 5000 to avoid conflict with frontend
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`✅ Backend running on http://localhost:${PORT}`);
 });
-//hello beautiful people, have a great day!

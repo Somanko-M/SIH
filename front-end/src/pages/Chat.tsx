@@ -1,3 +1,4 @@
+// src/pages/Chat.tsx
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,12 +23,25 @@ interface Message {
   emoji?: string;
 }
 
+interface Conversation {
+  conversationId: string;
+  participants: string[];
+  lastMessage?: string;
+  lastMessageAt?: string;
+}
+
+const NODE_API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const PY_API_URL = import.meta.env.VITE_API_URL_PY || "http://127.0.0.1:8000";
+
 const Chat = () => {
   const navigate = useNavigate();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [selectedConv, setSelectedConv] = useState<string | null>(null);
 
   // --- Quick Suggestions ---
   const quickSuggestions = [
@@ -47,105 +61,190 @@ const Chat = () => {
     scrollToBottom();
   }, [messages]);
 
-  // --- Fetch previous chat from backend ---
+  // --- Helper functions ---
+  const getUserEmail = () => localStorage.getItem("userEmail");
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem("token") || "";
+    const userEmail = getUserEmail();
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    if (userEmail) headers["X-User-Email"] = userEmail;
+    return headers;
+  };
+
+  // --- Load conversations ---
   useEffect(() => {
     const token = localStorage.getItem("token");
-    if (!token) {
+    const userEmail = getUserEmail();
+    if (!token && !userEmail) {
       navigate("/login");
       return;
     }
 
-    const fetchMessages = async () => {
+    const loadConversations = async () => {
       try {
-        const res = await fetch("http://localhost:8000/chat/history", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+        const res = await fetch(`${PY_API_URL}/conversations`, {
+          method: "GET",
+          headers: getAuthHeaders(),
         });
-        if (!res.ok) throw new Error("Failed to fetch chat history");
+        if (!res.ok) {
+          const txt = await res.text();
+          console.error("Failed to load conversations:", res.status, txt);
+          return;
+        }
         const data = await res.json();
-
-        const formatted = data.map((msg: any) => ({
-          id: msg.id.toString(),
-          content: msg.content,
-          sender: msg.sender,
-          timestamp: new Date(msg.timestamp),
-          emoji: msg.sender === "bot" ? "🤖" : undefined,
-        }));
-        setMessages(formatted);
+        const convs: Conversation[] = data.conversations || [];
+        setConversations(convs);
+        if (convs.length > 0) setSelectedConv(convs[0].conversationId);
       } catch (err) {
-        console.error(err);
+        console.error("Error fetching conversations:", err);
       }
     };
 
-    fetchMessages();
+    loadConversations();
   }, [navigate]);
 
-  // --- Send message ---
-  const handleSendMessage = async (content: string) => {
-    if (!content.trim()) return;
-
-    const token = localStorage.getItem("token");
-    if (!token) {
-      navigate("/login");
+  // --- Load messages for selected conversation ---
+  useEffect(() => {
+    if (!selectedConv) {
+      setMessages([]);
       return;
     }
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      content,
-      sender: "user",
+    const loadMessages = async () => {
+  try {
+    const res = await fetch(
+      `${PY_API_URL}/chat/history?conversationId=${encodeURIComponent(selectedConv)}`,
+      {
+        method: "GET",
+        headers: getAuthHeaders(),
+      }
+    );
+    if (!res.ok) {
+      const txt = await res.text();
+      console.error("Failed to load messages:", res.status, txt);
+      setMessages([]);
+      return;
+    }
+    const data = await res.json();
+    const rawMsgs: any[] = data.messages || [];
+
+    const formatted: Message[] = rawMsgs.map((msg: any, idx: number) => {
+      const isBot = msg.role === "assistant" || msg.sender === "serene_bot"; // ✅ fix here
+
+      return {
+        id: msg.id ? String(msg.id) : `${idx}_${Date.now()}`,
+        content: msg.content ?? msg.text ?? "",
+        sender: isBot ? "bot" : "user",
+        timestamp: msg.sentAt ? new Date(msg.sentAt) : new Date(),
+        emoji: msg.sender === "serene_bot" ? "🌸" : undefined,
+
+      };
+    });
+
+    setMessages(formatted);
+  } catch (err) {
+    console.error("Error loading messages:", err);
+    setMessages([]);
+  }
+};
+
+
+    loadMessages();
+  }, [selectedConv]);
+
+  // --- Send message handler ---
+  const handleSendMessage = async (content: string) => {
+  if (!content.trim()) return;
+
+  const token = localStorage.getItem("token");
+  const userEmail = getUserEmail();
+  if (!token && !userEmail) {
+    navigate("/login");
+    return;
+  }
+
+  const userMessage: Message = {
+    id: Date.now().toString(),
+    content,
+    sender: "user",
+    timestamp: new Date(),
+  };
+
+  setMessages((prev) => [...prev, userMessage]);
+  setInputValue("");
+  setIsTyping(true);
+
+  try {
+    // 1️⃣ Send to Node backend (Gemini AI)
+    const botRes = await fetch(`${NODE_API_URL}/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: content, sessionId: selectedConv || "default" }),
+    });
+    if (!botRes.ok) throw new Error("Bot API failed");
+    const botData = await botRes.json();
+    const botReplyText = botData.reply;
+
+    const botMessage: Message = {
+      id: (Date.now() + 1).toString(),
+      content: botReplyText,
+      sender: "bot",
       timestamp: new Date(),
+      emoji: "🤖",
     };
 
-    setMessages((prev) => [...prev, userMessage]);
-    setInputValue("");
-    setIsTyping(true);
+    const convId = selectedConv || undefined;
 
-    try {
-      const response = await fetch("http://localhost:8000/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ message: content }),
-      });
+    // 2️⃣ Store both messages in Python backend (with correct sender)
+    await fetch(`${PY_API_URL}/chat/send`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        conversationId: convId,
+        sender: userEmail,          // ✅ USER
+        recipient: "serene_bot",
+        text: content,
+      }),
+    });
 
-      if (!response.ok) throw new Error("Chat API failed");
+    await fetch(`${PY_API_URL}/chat/send`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        conversationId: convId,
+        sender: "serene_bot",       // ✅ BOT
+        recipient: userEmail,
+        text: botReplyText,
+      }),
+    });
 
-      const data = await response.json();
-
-      const botResponse: Message = {
-        id: (Date.now() + 1).toString(),
-        content: data.reply,
-        sender: "bot",
-        timestamp: new Date(),
-        emoji: "🤖",
-      };
-
-      setMessages((prev) => [...prev, botResponse]);
-    } catch (error) {
-      console.error("Error fetching bot response:", error);
-
-      const errorResponse: Message = {
-        id: (Date.now() + 1).toString(),
-        content: "⚠️ Sorry, I’m having trouble connecting right now.",
+    // 3️⃣ Update UI
+    setMessages((prev) => [...prev, botMessage]);
+    if (!selectedConv && convId) setSelectedConv(convId);
+  } catch (err) {
+    console.error("Error sending message:", err);
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: (Date.now() + 2).toString(),
+        content: "⚠️ Sorry, something went wrong!",
         sender: "bot",
         timestamp: new Date(),
         emoji: "❌",
-      };
+      },
+    ]);
+  } finally {
+    setIsTyping(false);
+  }
+};
 
-      setMessages((prev) => [...prev, errorResponse]);
-    } finally {
-      setIsTyping(false);
-    }
-  };
 
   const handleSuggestionClick = (text: string) => {
     handleSendMessage(text);
   };
 
+  // --- Render ---
   return (
     <div className="flex h-screen bg-background">
       {/* --- Chat Area --- */}
@@ -175,49 +274,32 @@ const Chat = () => {
           {messages.map((m) => (
             <div
               key={m.id}
-              className={`flex ${
-                m.sender === "user" ? "justify-end" : "justify-start"
-              }`}
+              className={`flex ${m.sender === "user" ? "justify-end" : "justify-start"}`}
             >
               <div
-                className={`max-w-[80%] ${
-                  m.sender === "user"
-                    ? "chat-bubble-user"
-                    : "chat-bubble-bot"
-                }`}
+                className={`max-w-[80%] ${m.sender === "user" ? "chat-bubble-user" : "chat-bubble-bot"}`}
               >
-                {m.emoji && m.sender === "bot" && (
-                  <div className="text-lg mb-1">{m.emoji}</div>
-                )}
+                {m.emoji && m.sender === "bot" && <div className="text-lg mb-1">{m.emoji}</div>}
                 <p className="text-sm leading-relaxed">{m.content}</p>
                 <p className="text-xs opacity-60 mt-2">
-                  {m.timestamp.toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
+                  {m.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                 </p>
               </div>
             </div>
           ))}
 
-          {/* Typing Indicator */}
           {isTyping && (
             <div className="flex justify-start">
               <div className="chat-bubble-bot">
                 <div className="flex items-center space-x-1">
                   <div className="w-2 h-2 bg-secondary-foreground/60 rounded-full animate-bounce"></div>
-                  <div
-                    className="w-2 h-2 bg-secondary-foreground/60 rounded-full animate-bounce"
-                    style={{ animationDelay: "0.2s" }}
-                  ></div>
-                  <div
-                    className="w-2 h-2 bg-secondary-foreground/60 rounded-full animate-bounce"
-                    style={{ animationDelay: "0.4s" }}
-                  ></div>
+                  <div className="w-2 h-2 bg-secondary-foreground/60 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }}></div>
+                  <div className="w-2 h-2 bg-secondary-foreground/60 rounded-full animate-bounce" style={{ animationDelay: "0.4s" }}></div>
                 </div>
               </div>
             </div>
           )}
+
           <div ref={messagesEndRef} />
         </div>
 
@@ -243,9 +325,7 @@ const Chat = () => {
             <Input
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              onKeyPress={(e) =>
-                e.key === "Enter" && handleSendMessage(inputValue)
-              }
+              onKeyPress={(e) => e.key === "Enter" && handleSendMessage(inputValue)}
               placeholder="Share what's on your mind... 💭"
               className="flex-1 rounded-full bg-muted/50 border-border/40"
             />

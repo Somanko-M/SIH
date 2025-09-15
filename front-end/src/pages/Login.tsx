@@ -1,8 +1,11 @@
+// src/pages/Login.tsx
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+const API_URL = import.meta.env.VITE_API_URL_PY || "http://localhost:8000";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -15,27 +18,58 @@ const Login = () => {
     setLoading(true);
 
     try {
-      const response = await fetch("http://localhost:8000/login", {
+      const response = await fetch(`${API_URL}/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
 
+      // Try to parse JSON even for non-OK responses to show server message
+      let data: any = null;
+      try {
+        data = await response.json();
+      } catch (err) {
+        // ignore parse errors
+      }
+
       if (!response.ok) {
-        const error = await response.json();
-        alert("Error: " + error.detail);
+        const message =
+          (data && (data.detail || data.message)) ||
+          `Login failed with status ${response.status}`;
+        // show a user-friendly message
+        alert("Error: " + message);
         setLoading(false);
         return;
       }
 
-      const data = await response.json();
+      // Successful login
       console.log("Login successful:", data);
 
-      // Save token for authenticated requests
-      localStorage.setItem("token", data.access_token);
+      // Normalize token (backend may return access_token or token)
+      const token = data?.access_token || data?.token || null;
+      if (token) {
+        localStorage.setItem("token", token); // other code expects 'token'
+      }
 
-      alert("Login successful!");
-      navigate("/chat"); // redirect after login
+      // Determine email to store: prefer backend returned user.email, else input email
+      const returnedEmail = data?.user?.email || data?.email || email;
+      if (returnedEmail) {
+        localStorage.setItem("userEmail", returnedEmail);
+      }
+
+      // Store user object (without password) if provided
+      if (data?.user) {
+        const safeUser = { ...data.user };
+        if (safeUser.password) delete safeUser.password;
+        try {
+          localStorage.setItem("user", JSON.stringify(safeUser));
+        } catch (err) {
+          // ignore storage quota errors
+        }
+      }
+
+      // Navigate to chat after login
+      navigate("/chat");
     } catch (err) {
       console.error(err);
       alert("Login failed. Please try again.");

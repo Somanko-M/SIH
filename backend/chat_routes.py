@@ -1,5 +1,5 @@
 # chat_routes.py
-from fastapi import APIRouter, HTTPException, Header, Depends
+from fastapi import APIRouter, HTTPException, Header, Depends, Query
 from pydantic import BaseModel
 from typing import List, Optional
 from firebase_admin import firestore
@@ -25,6 +25,9 @@ class MessageOut(BaseModel):
 # Temporary "auth" (header based)
 # -------------------------
 def get_current_user(x_user_email: str = Header(None)):
+    """
+    Simple header-based auth. Requires frontend to send X-User-Email in headers.
+    """
     if not x_user_email:
         raise HTTPException(status_code=401, detail="Missing X-User-Email header")
     user_doc = db.collection("users").document(x_user_email).get()
@@ -39,7 +42,7 @@ def get_current_user(x_user_email: str = Header(None)):
 def send_message(payload: SendMessage, current_user: str = Depends(get_current_user)):
     user_email = current_user
 
-    # create a new 1:1 conversation if no conversationId provided
+    # Create new conversation if none provided
     if not payload.conversationId:
         if not payload.recipient:
             raise HTTPException(status_code=400, detail="recipient required to create conversation")
@@ -63,10 +66,18 @@ def send_message(payload: SendMessage, current_user: str = Depends(get_current_u
             "lastMessageAt": firestore.SERVER_TIMESTAMP
         })
 
-    # add message doc
-    msg_ref = db.collection("conversations").document(conversation_id).collection("messages").document()
+    # ✅ Correct sender detection
+    if payload.recipient == "serene_bot":
+        # message sent by user → sender is the user
+        sender = user_email
+    else:
+        # if not sending TO the bot, assume it's from the bot itself
+        sender = "serene_bot"
+
+    # Add message document
+    msg_ref = conv_ref.collection("messages").document()
     msg_ref.set({
-        "sender": user_email,
+        "sender": sender,
         "text": payload.text,
         "sentAt": firestore.SERVER_TIMESTAMP
     })
@@ -75,7 +86,7 @@ def send_message(payload: SendMessage, current_user: str = Depends(get_current_u
 
 
 # -------------------------
-# Get messages for a conversation (latest N)
+# Get messages for a conversation
 # -------------------------
 @router.get("/chat/{conversation_id}/messages", response_model=List[MessageOut])
 def get_messages(conversation_id: str, limit: int = 50, current_user: str = Depends(get_current_user)):
@@ -94,11 +105,7 @@ def get_messages(conversation_id: str, limit: int = 50, current_user: str = Depe
     for d in docs:
         m = d.to_dict()
         sent = m.get("sentAt")
-        # convert Firestore timestamp to ISO if possible
-        try:
-            sent_iso = sent.isoformat()
-        except Exception:
-            sent_iso = str(sent)
+        sent_iso = sent.isoformat() if hasattr(sent, "isoformat") else str(sent)
         messages.append({
             "sender": m.get("sender"),
             "text": m.get("text"),
@@ -106,29 +113,47 @@ def get_messages(conversation_id: str, limit: int = 50, current_user: str = Depe
         })
     return list(reversed(messages))
 
-
 # -------------------------
-# List conversations for current user
+# List conversations
 # -------------------------
 @router.get("/conversations")
 def list_conversations(current_user: str = Depends(get_current_user), limit: int = 50):
-    query = db.collection("conversations")\
-              .where("participants", "array_contains", current_user)\
-              .order_by("lastMessageAt", direction=firestore.Query.DESCENDING)\
-              .limit(limit)
+    query = (
+        db.collection("conversations")
+        .where("participants", "array_contains", current_user)
+        .order_by("lastMessageAt", direction=firestore.Query.DESCENDING)
+        .limit(limit)
+    )
     docs = query.stream()
     result = []
     for d in docs:
         data = d.to_dict()
         last_at = data.get("lastMessageAt")
-        try:
-            last_at_iso = last_at.isoformat()
-        except Exception:
-            last_at_iso = str(last_at)
+        last_at_iso = last_at.isoformat() if hasattr(last_at, "isoformat") else str(last_at)
         result.append({
             "conversationId": d.id,
             "participants": data.get("participants"),
             "lastMessage": data.get("lastMessage"),
             "lastMessageAt": last_at_iso
         })
-    return {"conversations": result}
+    return {"ok": True, "conversations": result}
+
+# -------------------------
+# Compatibility endpoints (/chat, /chat/history)
+# -------------------------
+@router.post("/chat")
+def chat_compat(payload: SendMessage, current_user: str = Depends(get_current_user)):
+    return send_message(payload, current_user)
+
+@router.get("/chat/history")
+def chat_history_compat(
+    conversationId: Optional[str] = Query(None),
+    limit: int = 50,
+    current_user: str = Depends(get_current_user)
+):
+    if conversationId:
+        msgs = get_messages(conversationId, limit, current_user)
+        return {"ok": True, "messages": msgs}
+    else:
+        convs = list_conversations(current_user, limit)
+        return convs

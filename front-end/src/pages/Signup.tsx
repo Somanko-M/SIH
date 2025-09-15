@@ -1,9 +1,12 @@
+// src/pages/Signup.tsx
 import { useState } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useNavigate } from "react-router-dom";
+
+const API_URL = import.meta.env.VITE_API_URL_PY || "http://127.0.0.1:8000";
 
 const Signup = () => {
   const navigate = useNavigate();
@@ -25,7 +28,7 @@ const Signup = () => {
     setLoading(true);
 
     try {
-      const response = await fetch("http://localhost:8000/register", {
+      const response = await fetch(`${API_URL}/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
@@ -33,13 +36,13 @@ const Signup = () => {
 
       if (!response.ok) {
         const error = await response.json();
-        alert("Error: " + error.detail);
+        alert("Error: " + (error.detail || error.message || "Signup failed"));
         setLoading(false);
         return;
       }
 
       const data = await response.json();
-      alert(data.message);
+      alert(data.message || "Signup successful!");
 
       // Redirect to login after signup
       navigate("/login");
