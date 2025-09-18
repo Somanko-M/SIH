@@ -11,6 +11,7 @@ import Library from "./pages/Library";
 import Groups from "./pages/Groups";
 import NotFound from "./pages/NotFound";
 
+
 // 🔥 import the new pages
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -59,4 +60,4 @@ const App = () => (
   </QueryClientProvider>
 );
 
-export default App;
+export default App;

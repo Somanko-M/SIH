@@ -33,6 +33,13 @@ interface Conversation {
 const NODE_API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 const PY_API_URL = import.meta.env.VITE_API_URL_PY || "http://127.0.0.1:8000";
 
+// Helpline number
+const HELPLINE_NUMBER = "141116";
+
+// Regex for detecting self-harm / suicidal intent phrases (case-insensitive)
+// This is intentionally broad; adjust phrases as you like.
+const SELF_HARM_REGEX = /\b(kill myself|kill me|i want to die|want to die|end my life|suicide|suicidal|die by suicide|hurt myself|cut myself|self[- ]harm|kill myself|i'm going to die|i can't go on|i can't do this anymore|i can't take it|overdose|take pills|want to end it all)\b/i;
+
 const Chat = () => {
   const navigate = useNavigate();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -70,6 +77,11 @@ const Chat = () => {
     if (token) headers["Authorization"] = `Bearer ${token}`;
     if (userEmail) headers["X-User-Email"] = userEmail;
     return headers;
+  };
+
+  const isSelfHarmMessage = (text: string) => {
+    if (!text) return false;
+    return SELF_HARM_REGEX.test(text);
   };
 
   // --- Load conversations ---
@@ -112,133 +124,238 @@ const Chat = () => {
     }
 
     const loadMessages = async () => {
-  try {
-    const res = await fetch(
-      `${PY_API_URL}/chat/history?conversationId=${encodeURIComponent(selectedConv)}`,
-      {
-        method: "GET",
-        headers: getAuthHeaders(),
+      try {
+        const res = await fetch(
+          `${PY_API_URL}/chat/history?conversationId=${encodeURIComponent(selectedConv)}`,
+          {
+            method: "GET",
+            headers: getAuthHeaders(),
+          }
+        );
+        if (!res.ok) {
+          const txt = await res.text();
+          console.error("Failed to load messages:", res.status, txt);
+          setMessages([]);
+          return;
+        }
+        const data = await res.json();
+        const rawMsgs: any[] = data.messages || [];
+
+        const formatted: Message[] = rawMsgs.map((msg: any, idx: number) => {
+          const isBot = msg.role === "assistant" || msg.sender === "serene_bot";
+          return {
+            id: msg.id ? String(msg.id) : `${idx}_${Date.now()}`,
+            content: msg.content ?? msg.text ?? "",
+            sender: isBot ? "bot" : "user",
+            timestamp: msg.sentAt ? new Date(msg.sentAt) : new Date(),
+            emoji: msg.sender === "serene_bot" ? "🌸" : undefined,
+          };
+        });
+
+        setMessages(formatted);
+      } catch (err) {
+        console.error("Error loading messages:", err);
+        setMessages([]);
       }
-    );
-    if (!res.ok) {
-      const txt = await res.text();
-      console.error("Failed to load messages:", res.status, txt);
-      setMessages([]);
-      return;
-    }
-    const data = await res.json();
-    const rawMsgs: any[] = data.messages || [];
-
-    const formatted: Message[] = rawMsgs.map((msg: any, idx: number) => {
-      const isBot = msg.role === "assistant" || msg.sender === "serene_bot"; // ✅ fix here
-
-      return {
-        id: msg.id ? String(msg.id) : `${idx}_${Date.now()}`,
-        content: msg.content ?? msg.text ?? "",
-        sender: isBot ? "bot" : "user",
-        timestamp: msg.sentAt ? new Date(msg.sentAt) : new Date(),
-        emoji: msg.sender === "serene_bot" ? "🌸" : undefined,
-
-      };
-    });
-
-    setMessages(formatted);
-  } catch (err) {
-    console.error("Error loading messages:", err);
-    setMessages([]);
-  }
-};
-
+    };
 
     loadMessages();
   }, [selectedConv]);
 
   // --- Send message handler ---
   const handleSendMessage = async (content: string) => {
-  if (!content.trim()) return;
+    if (!content.trim()) return;
 
-  const token = localStorage.getItem("token");
-  const userEmail = getUserEmail();
-  if (!token && !userEmail) {
-    navigate("/login");
-    return;
-  }
+    const token = localStorage.getItem("token");
+    const userEmail = getUserEmail();
+    if (!token && !userEmail) {
+      navigate("/login");
+      return;
+    }
 
-  const userMessage: Message = {
-    id: Date.now().toString(),
-    content,
-    sender: "user",
-    timestamp: new Date(),
-  };
-
-  setMessages((prev) => [...prev, userMessage]);
-  setInputValue("");
-  setIsTyping(true);
-
-  try {
-    // 1️⃣ Send to Node backend (Gemini AI)
-    const botRes = await fetch(`${NODE_API_URL}/chat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: content, sessionId: selectedConv || "default" }),
-    });
-    if (!botRes.ok) throw new Error("Bot API failed");
-    const botData = await botRes.json();
-    const botReplyText = botData.reply;
-
-    const botMessage: Message = {
-      id: (Date.now() + 1).toString(),
-      content: botReplyText,
-      sender: "bot",
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      content,
+      sender: "user",
       timestamp: new Date(),
-      emoji: "🤖",
     };
+
+    // Add user message to UI immediately
+    setMessages((prev) => [...prev, userMessage]);
+    setInputValue("");
+    setIsTyping(true);
 
     const convId = selectedConv || undefined;
 
-    // 2️⃣ Store both messages in Python backend (with correct sender)
-    await fetch(`${PY_API_URL}/chat/send`, {
-      method: "POST",
-      headers: getAuthHeaders(),
-      body: JSON.stringify({
-        conversationId: convId,
-        sender: userEmail,          // ✅ USER
-        recipient: "serene_bot",
-        text: content,
-      }),
-    });
+    // If content matches self-harm patterns => immediately respond with helpline and store messages.
+    if (isSelfHarmMessage(content)) {
+      try {
+        const helplineText =
+          `📞 If you are thinking about harming yourself or are in immediate danger, please call ${HELPLINE_NUMBER} right now. ` +
+          `If you can, try to stay with someone you trust and seek emergency help. You are not alone. 💙`;
 
-    await fetch(`${PY_API_URL}/chat/send`, {
-      method: "POST",
-      headers: getAuthHeaders(),
-      body: JSON.stringify({
-        conversationId: convId,
-        sender: "serene_bot",       // ✅ BOT
-        recipient: userEmail,
-        text: botReplyText,
-      }),
-    });
+        const helplineMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          content: helplineText,
+          sender: "bot",
+          timestamp: new Date(),
+          emoji: "☎️",
+        };
 
-    // 3️⃣ Update UI
-    setMessages((prev) => [...prev, botMessage]);
-    if (!selectedConv && convId) setSelectedConv(convId);
-  } catch (err) {
-    console.error("Error sending message:", err);
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: (Date.now() + 2).toString(),
-        content: "⚠️ Sorry, something went wrong!",
+        // Update UI
+        setMessages((prev) => [...prev, helplineMessage]);
+
+        // Save user message to backend
+        try {
+          await fetch(`${PY_API_URL}/chat/send`, {
+            method: "POST",
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+              conversationId: convId,
+              sender: userEmail,
+              recipient: "serene_bot",
+              text: content,
+            }),
+          });
+        } catch (err) {
+          console.error("Failed saving user message (self-harm):", err);
+        }
+
+        // Save helpline bot message to backend
+        try {
+          await fetch(`${PY_API_URL}/chat/send`, {
+            method: "POST",
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+              conversationId: convId,
+              sender: "serene_bot",
+              recipient: userEmail,
+              text: helplineText,
+            }),
+          });
+        } catch (err) {
+          console.error("Failed saving helpline message:", err);
+        }
+      } catch (err) {
+        console.error("Error handling self-harm message:", err);
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: (Date.now() + 2).toString(),
+            content: "⚠️ Sorry, something went wrong while processing your message.",
+            sender: "bot",
+            timestamp: new Date(),
+            emoji: "❌",
+          },
+        ]);
+      } finally {
+        setIsTyping(false);
+      }
+
+      // Important: do NOT forward the self-harm message to the external bot API in order to avoid unsafe replies.
+      return;
+    }
+
+    // --- Normal flow: send to Node backend (Gemini AI) and store messages ---
+    try {
+      const botRes = await fetch(`${NODE_API_URL}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: content, sessionId: selectedConv || "default" }),
+      });
+      if (!botRes.ok) throw new Error("Bot API failed");
+      const botData = await botRes.json();
+      const botReplyText = botData.reply;
+
+      const botMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: botReplyText,
         sender: "bot",
         timestamp: new Date(),
-        emoji: "❌",
-      },
-    ]);
-  } finally {
-    setIsTyping(false);
-  }
-};
+        emoji: "🤖",
+      };
 
+      // Save user message to backend
+      try {
+        await fetch(`${PY_API_URL}/chat/send`, {
+          method: "POST",
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            conversationId: convId,
+            sender: userEmail,
+            recipient: "serene_bot",
+            text: content,
+          }),
+        });
+      } catch (err) {
+        console.error("Failed saving user message:", err);
+      }
+
+      // Save bot reply to backend
+      try {
+        await fetch(`${PY_API_URL}/chat/send`, {
+          method: "POST",
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            conversationId: convId,
+            sender: "serene_bot",
+            recipient: userEmail,
+            text: botReplyText,
+          }),
+        });
+      } catch (err) {
+        console.error("Failed saving bot reply:", err);
+      }
+
+      // Update UI
+      setMessages((prev) => [...prev, botMessage]);
+
+      // If user asked for help/number via non-self-harm keywords, still optionally show helpline
+      if (/help|emergency|number|call/i.test(content)) {
+        const helplineText = `📞 You can call ${HELPLINE_NUMBER} for immediate support. You are not alone. 💙`;
+        const helplineMessage: Message = {
+          id: (Date.now() + 2).toString(),
+          content: helplineText,
+          sender: "bot",
+          timestamp: new Date(),
+          emoji: "☎️",
+        };
+        setMessages((prev) => [...prev, helplineMessage]);
+
+        // Save helpline message to backend
+        try {
+          await fetch(`${PY_API_URL}/chat/send`, {
+            method: "POST",
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+              conversationId: convId,
+              sender: "serene_bot",
+              recipient: userEmail,
+              text: helplineText,
+            }),
+          });
+        } catch (err) {
+          console.error("Failed saving helpline message:", err);
+        }
+      }
+
+      if (!selectedConv && convId) setSelectedConv(convId);
+    } catch (err) {
+      console.error("Error sending message:", err);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 3).toString(),
+          content: "⚠️ Sorry, something went wrong!",
+          sender: "bot",
+          timestamp: new Date(),
+          emoji: "❌",
+        },
+      ]);
+    } finally {
+      setIsTyping(false);
+    }
+  };
 
   const handleSuggestionClick = (text: string) => {
     handleSendMessage(text);

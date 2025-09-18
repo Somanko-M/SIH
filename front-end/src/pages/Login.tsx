@@ -1,14 +1,15 @@
-// src/pages/Login.tsx
-import { useState } from "react";
+import { useState, useContext } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AuthContext } from "../context/AuthContext"; // ✅ using context
 
 const API_URL = import.meta.env.VITE_API_URL_PY || "http://localhost:8000";
 
 const Login = () => {
   const navigate = useNavigate();
+  const { login } = useContext(AuthContext); // ✅ get login function from context
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -18,17 +19,30 @@ const Login = () => {
     setLoading(true);
 
     try {
+      // ✅ Hardcoded admin check FIRST
+      if (email === "admin@123" && password === "vanilla123") {
+        const adminUser = {
+          email: "admin@123",
+          username: "Admin", // 👈 you can display this in Layout
+          role: "admin" as const,
+        };
+
+        login(adminUser, "admin-token"); // ✅ updates context immediately
+        navigate("/admin"); // ✅ redirect to admin dashboard
+        return;
+      }
+
+      // ✅ Otherwise, call backend for normal user
       const response = await fetch(`${API_URL}/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
 
-      // Try to parse JSON even for non-OK responses to show server message
       let data: any = null;
       try {
         data = await response.json();
-      } catch (err) {
+      } catch {
         // ignore parse errors
       }
 
@@ -36,39 +50,33 @@ const Login = () => {
         const message =
           (data && (data.detail || data.message)) ||
           `Login failed with status ${response.status}`;
-        // show a user-friendly message
         alert("Error: " + message);
         setLoading(false);
         return;
       }
 
-      // Successful login
+      // ✅ Successful login
       console.log("Login successful:", data);
 
-      // Normalize token (backend may return access_token or token)
       const token = data?.access_token || data?.token || null;
-      if (token) {
-        localStorage.setItem("token", token); // other code expects 'token'
-      }
 
-      // Determine email to store: prefer backend returned user.email, else input email
-      const returnedEmail = data?.user?.email || data?.email || email;
-      if (returnedEmail) {
-        localStorage.setItem("userEmail", returnedEmail);
-      }
+      // Build safe user object
+      const safeUser = data?.user
+        ? { ...data.user }
+        : { email: data?.email || email };
 
-      // Store user object (without password) if provided
-      if (data?.user) {
-        const safeUser = { ...data.user };
-        if (safeUser.password) delete safeUser.password;
-        try {
-          localStorage.setItem("user", JSON.stringify(safeUser));
-        } catch (err) {
-          // ignore storage quota errors
-        }
-      }
+      if (safeUser.password) delete safeUser.password;
 
-      // Navigate to chat after login
+      // ✅ Ensure role exists (backend may not send it, fallback to "user")
+      const userWithRole = {
+        ...safeUser,
+        role: data?.role || safeUser.role || "user",
+      };
+
+      // ✅ Update AuthContext (instant state change, no reload needed)
+      login(userWithRole, token);
+
+      // Redirect after login
       navigate("/chat");
     } catch (err) {
       console.error(err);
@@ -111,7 +119,7 @@ const Login = () => {
             </Button>
           </form>
           <p className="text-sm text-center mt-4 text-muted-foreground">
-            Don’t have an account?{" "}
+            Don't have an account?{" "}
             <Link
               to="/signup"
               className="text-primary font-medium hover:underline"

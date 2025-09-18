@@ -1,16 +1,25 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Heart, MessageCircle, BookOpen, Users, Brain, Home, AlertTriangle } from "lucide-react";
-import { useState } from "react";
+import {
+  MessageCircle,
+  BookOpen,
+  Users,
+  Brain,
+  Home,
+  AlertTriangle,
+} from "lucide-react";
+import { useState, useContext } from "react";
 import QuotePopup from "@/components/QuotePopup";
-
+import React from "react";
+import { AuthContext } from "../context/AuthContext";
 
 const Layout = ({ children }: { children: React.ReactNode }) => {
   const location = useLocation();
+  const navigate = useNavigate();
   const [showEmergency, setShowEmergency] = useState(false);
 
-  // 🔑 Replace this later with actual auth state
-  const isAuthenticated = false;
+  // ✅ Auth context gives us user info
+  const { user, logout } = useContext(AuthContext);
 
   const navItems = [
     { path: "/", icon: Home, label: "Home" },
@@ -21,10 +30,10 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   ];
 
   const emergencyContacts = [
-    { name: "Crisis Text Line", contact: "Text HOME to 741741", type: "text" },
-    { name: "National Suicide Prevention", contact: "988", type: "call" },
+    { name: "Crisis Text Line", contact: "Text HOME to +91 9999 666 555", type: "text" },
+    { name: "National Suicide Prevention", contact: "14416", type: "call" },
     { name: "Campus Counseling", contact: "(555) 123-4567", type: "call" },
-    { name: "Local Emergency", contact: "911", type: "emergency" },
+    { name: "Local Emergency", contact: "10111", type: "emergency" },
   ];
 
   return (
@@ -34,12 +43,14 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             {/* Logo */}
-            <Link to="/" className="flex items-center space-x-2 group">
-              <div className="w-8 h-8 bg-gradient-to-r from-primary to-sunshine rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                <Heart className="w-5 h-5 text-white" />
-              </div>
-              <span className="text-xl font-bold bg-gradient-to-r from-primary to-sunset bg-clip-text text-transparent">
-                MindSpace
+            <Link to="/" className="flex items-center space-x-3 group">
+              <img
+                src="/Skyelogo.png"
+                alt="Skye Logo"
+                className="h-20 w-auto group-hover:scale-110 transition-transform duration-300"
+              />
+              <span className="text-3xl font-extrabold bg-gradient-to-r from-primary to-sunset bg-clip-text text-transparent">
+                Skye
               </span>
             </Link>
 
@@ -66,7 +77,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
             </div>
 
             {/* Right-side Actions */}
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-3 min-w-[220px] justify-end">
               {/* Emergency Button */}
               <div className="relative">
                 <Button
@@ -90,10 +101,16 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                         >
                           <div>
                             <p className="font-medium text-sm">{contact.name}</p>
-                            <p className="text-xs text-muted-foreground">{contact.contact}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {contact.contact}
+                            </p>
                           </div>
                           <Button size="sm" className="btn-emergency text-xs">
-                            {contact.type === "call" ? "📞" : contact.type === "text" ? "💬" : "🚨"}
+                            {contact.type === "call"
+                              ? "📞"
+                              : contact.type === "text"
+                              ? "💬"
+                              : "🚨"}
                           </Button>
                         </div>
                       ))}
@@ -105,18 +122,46 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
                 )}
               </div>
 
-              {/* Show Login/Signup only if NOT signed in */}
-              {!isAuthenticated && (
-                <>
+              {/* ✅ Show username if logged in, else Login/Signup */}
+              {user ? (
+                <div className="flex items-center gap-3">
+                  <span className="font-medium text-gray-700">
+                    {user.role === "admin"
+                      ? `⭐ Admin: ${user.username || "admin"}`
+                      : `👤 ${user.username || user.email}`}
+                  </span>
+
+                  {/* Show Admin Dashboard link if role is admin */}
+                  {user.role === "admin" && (
+                    <Button
+                      size="sm"
+                      className="bg-gradient-to-r from-primary to-sunshine text-white"
+                      onClick={() => navigate("/admin")}
+                    >
+                      Dashboard
+                    </Button>
+                  )}
+
+                  <Button variant="outline" size="sm" onClick={logout}>
+                    Logout
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
                   <Link to="/login">
-                    <Button variant="outline" size="sm">Login</Button>
+                    <Button variant="outline" size="sm">
+                      Login
+                    </Button>
                   </Link>
                   <Link to="/signup">
-                    <Button size="sm" className="bg-gradient-to-r from-primary to-sunshine text-white">
+                    <Button
+                      size="sm"
+                      className="bg-gradient-to-r from-primary to-sunshine text-white"
+                    >
                       Sign Up
                     </Button>
                   </Link>
-                </>
+                </div>
               )}
             </div>
           </div>
@@ -124,9 +169,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
       </nav>
 
       {/* Main Content */}
-      <main className="flex-1">
-        {children}
-      </main>
+      <main className="flex-1">{children}</main>
 
       {/* Mobile Navigation */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur-sm border-t border-border/40 px-4 py-2 z-40">
@@ -151,7 +194,8 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
           })}
         </div>
       </div>
-       <QuotePopup />
+
+      <QuotePopup />
 
       {/* Background Decorations */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
